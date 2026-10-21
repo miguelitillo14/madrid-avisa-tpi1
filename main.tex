@@ -1,0 +1,101 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage{lmodern,microtype}
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.7cm,right=2.7cm]{geometry}
+\usepackage{setspace}\setstretch{1.12}
+\setlength{\parindent}{0pt}\setlength{\parskip}{0.65em}
+\usepackage{xcolor,graphicx,booktabs,tabularx,array,enumitem,float,caption,listings,amsmath,url,hyperref,fancyhdr,lastpage,titlesec,tcolorbox}
+\definecolor{LoyolaBlue}{HTML}{082B66}\definecolor{LoyolaCyan}{HTML}{5CC8DF}\definecolor{SoftBlue}{HTML}{EEF5FA}\definecolor{SoftGray}{HTML}{F5F6F7}\definecolor{TextGray}{HTML}{374151}
+\lstdefinestyle{codigo}{basicstyle=\ttfamily\small,backgroundcolor=\color{SoftGray},frame=single,rulecolor=\color{LoyolaBlue!35},numbers=left,numberstyle=\tiny,numbersep=8pt,breaklines=true,showstringspaces=false,tabsize=2,keywordstyle=\color{LoyolaBlue}\bfseries,commentstyle=\color{green!45!black},stringstyle=\color{orange!60!black}}
+\lstset{style=codigo}
+\hypersetup{colorlinks=true,linkcolor=LoyolaBlue,urlcolor=LoyolaBlue,citecolor=LoyolaBlue,pdftitle={TPI 1: análisis de avisos ciudadanos de Madrid},pdfauthor={Completar nombre y apellidos}}
+\pagestyle{fancy}\fancyhf{}\fancyhead[L]{\small\textcolor{LoyolaBlue}{Ampliación de Bases de Datos}}\fancyhead[R]{\small\textcolor{TextGray}{Curso 2026/2027}}\fancyfoot[L]{\small Universidad Loyola Andalucía}\fancyfoot[R]{\small Página \thepage\ de \pageref{LastPage}}\renewcommand{\headrulewidth}{0.6pt}\renewcommand{\headrule}{\hbox to\headwidth{\color{LoyolaCyan}\leaders\hrule height \headrulewidth\hfill}}
+\titleformat{\section}{\Large\bfseries\color{LoyolaBlue}}{\thesection.}{0.6em}{}\titleformat{\subsection}{\large\bfseries\color{LoyolaBlue}}{\thesubsection.}{0.6em}{}
+\newtcolorbox{indicacion}{colback=SoftBlue,colframe=LoyolaCyan,boxrule=0.8pt,arc=2mm,left=3mm,right=3mm,top=2mm,bottom=2mm}
+\newcommand{\Estudiante}{Completar nombre y apellidos}
+\newcommand{\FechaEntrega}{21/10/2026}
+\begin{document}
+\begin{titlepage}\thispagestyle{empty}\begin{center}
+\includegraphics[width=0.72\textwidth]{logo_uloyola.png}\vspace{1.1cm}
+
+{\Large\bfseries\color{LoyolaBlue} Ampliación de Bases de Datos\par}\vspace{0.35cm}
+{\large Grado en Ingeniería del Software\par}{\large Curso académico 2026/2027\par}\vspace{1.4cm}
+\colorbox{SoftBlue}{\parbox{0.88\textwidth}{\centering\vspace{0.5cm}{\LARGE\bfseries\color{LoyolaBlue} TPI 1\par}\vspace{0.3cm}{\Large\bfseries Avisos ciudadanos de Madrid\par}\vspace{0.2cm}{\large Análisis espacial con PostGIS y evolución temporal con InfluxDB\par}\vspace{0.5cm}}}
+\vfill\begin{tabular}{>{\bfseries}p{4cm}p{9.2cm}}Estudiante: & \Estudiante\\Profesor: & Dr. Anier Soria Lorente\\Fecha: & \FechaEntrega\\\end{tabular}\vfill{\small Universidad Loyola Andalucía}\end{center}\end{titlepage}
+\tableofcontents\newpage
+\section{Problema real y contexto}
+El Ayuntamiento de Madrid recibe avisos sobre incidencias de limpieza, arbolado, señales y otros servicios urbanos. El conjunto abierto \textit{Avisos ciudadanos recibidos (SIC)} publica esos registros con fecha, categoría, distrito, dirección y coordenadas. Una unidad municipal necesita detectar avisos que se encuentran cerca para apoyar el triaje y, además, conocer cómo varía el volumen de avisos por zona y categoría a lo largo del tiempo.
+
+La memoria trabaja con una muestra reproducible de cinco avisos reales del recurso de 2026, todos recibidos el 1 de enero. La muestra permite demostrar una consulta espacial concreta, aunque no basta para inferir patrones temporales ni el funcionamiento global del servicio. El proyecto incluye una canalización preparada para procesar un CSV más amplio.
+
+\section{Necesidad y objetivos}
+\subsection{Necesidad identificada}
+Un listado tabular no muestra qué avisos están físicamente próximos; las consultas espaciales permiten priorizar una revisión de campo. A la vez, los datos tienen fecha y categorías, por lo que conviene analizarlos como agregados de series temporales. Son dos consultas distintas y requieren estructuras adecuadas.
+\subsection{Objetivo general}
+Diseñar un prototipo reproducible que use PostGIS para consultas espaciales sobre avisos reales de Madrid e InfluxDB para almacenar y consultar agregados diarios por distrito y categoría.
+\subsection{Objetivos específicos}
+\begin{itemize}[leftmargin=1.2cm]
+\item Documentar la procedencia y el sistema de referencia de las coordenadas.
+\item Modelar los avisos como puntos en EPSG:25830 e indexarlos con GiST para consultar proximidad.
+\item Agregar avisos por día, distrito y categoría y escribir la serie resultante en InfluxDB.
+\item Contrastar el caso espacial con la muestra mediante una demostración ejecutada en SQLite/R-tree y dejar configurado el despliegue reproducible de ambos motores especializados.
+\end{itemize}
+\section{Conceptos y tecnologías aplicadas}
+\subsection{PostGIS, puntos y SRID}
+El diccionario municipal describe las coordenadas reales como UTM-30 sobre ETRS89. Se almacenan como \texttt{geometry(Point, 25830)}; este sistema proyectado expresa las distancias en metros dentro del ámbito de Madrid. PostGIS añade tipos espaciales y funciones al modelo PostgreSQL.
+\subsection{Índice espacial y proximidad}
+La consulta usa \texttt{ST\_DWithin(a.geom,b.geom,50)} para seleccionar pares a 50 metros o menos. Un índice GiST sobre la geometría ayuda a reducir candidatos en consultas compatibles. La consulta debe excluir el emparejamiento de un aviso consigo mismo y evitar duplicados mediante el orden de los identificadores.
+\subsection{InfluxDB y agregación temporal}
+InfluxDB recibe una medición \texttt{avisos\_diarios}, con fecha como tiempo, distrito y categoría como etiquetas y el total como campo numérico. Esta forma permite consultar y agrupar valores a lo largo de ventanas temporales. Las etiquetas se limitan a dimensiones descriptivas estables; el identificador individual del aviso no se guarda como etiqueta.
+\section{Desarrollo del trabajo}
+\subsection{Diseño de la solución}
+El flujo parte de un CSV del portal municipal. Un cargador Python transforma cada fila en un punto PostGIS y calcula los conteos diarios para InfluxDB. Docker Compose define los dos servicios y conserva sus datos en volúmenes. PostGIS mantiene el detalle individual y resuelve preguntas geográficas; InfluxDB mantiene la serie agregada. El prototipo ejecutado de la consulta espacial emplea SQLite en memoria y su índice R-tree como prueba local independiente de los contenedores.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{lXX}\toprule
+Componente & Modelo almacenado & Consulta del caso\\\midrule
+PostGIS & Un registro por aviso; punto EPSG:25830; índice GiST & Pares distintos dentro de 50 m\\
+InfluxDB & Total diario etiquetado por distrito y categoría & Evolución temporal de los agregados\\
+SQLite/R-tree & Muestra temporal de cinco registros & Demostración ejecutada de la proximidad\\\bottomrule
+\end{tabularx}\end{center}
+\subsection{Implementación}
+El proyecto contiene el esquema SQL, la consulta PostGIS, un archivo Compose para PostGIS e InfluxDB, una muestra CSV y el cargador Python. El ETL usa el identificador municipal para hacer una carga repetible en PostgreSQL y agrupa por fecha, distrito y categoría antes de escribir en InfluxDB. La consulta temporal de ejemplo se incluye en Flux.
+
+Los contenedores no se pudieron iniciar en el equipo de elaboración porque Docker no tenía un motor activo. Por ello, la configuración es una implementación preparada para ejecutar, no una validación observada de la carga en PostGIS e InfluxDB. El resultado espacial que sigue procede de la ejecución de SQLite/R-tree ya realizada sobre la misma muestra.
+\section{Resultados obtenidos}
+La muestra contiene cinco avisos reales, con coordenadas reales UTM-30 ETRS89. La prueba SQLite/R-tree encontró un solo par dentro del umbral de 50 m:
+\begin{center}\begin{tabular}{ll}\toprule
+Aviso A & 2: limpieza de vía pública\\Aviso B & 4: incidencia en señal\\Distrito y barrio & Moratalaz, Media Legua\\Distancia calculada & 21,0 m\\\bottomrule\end{tabular}\end{center}
+Ambos registros corresponden a la calle Corregidor Diego de Valderrabano, números 32 y 26. El plan de consulta de SQLite utilizó el índice virtual R-tree para el filtrado espacial.
+
+En los cinco registros, el agregado de diseño produciría cinco grupos fecha-distrito-categoría, cada uno con total 1. Este conteo se deriva directamente del CSV; no se presenta como una escritura observada en InfluxDB. La muestra comparte una sola fecha y, por tanto, no permite evaluar una tendencia temporal.
+\section{Análisis e interpretación}
+La pareja encontrada muestra que la proximidad puede relacionar avisos de servicios diferentes en una zona reducida. Los 21 metros son una señal para revisar los casos y su contexto; no prueban que sean duplicados ni que deban asignarse al mismo equipo. La distancia calculada entre coordenadas tampoco modela la red de calles ni obstáculos.
+
+La serie temporal aporta una perspectiva complementaria: cuando se procese un intervalo suficientemente largo, permitirá comparar conteos por día, distrito y categoría. Cinco avisos del mismo día solo verifican la lógica de agregación de forma trivial. No se deben extraer conclusiones de demanda o estacionalidad con esta muestra.
+\section{Decisiones tomadas y justificación}
+\begin{itemize}[leftmargin=1.2cm]
+\item \textbf{Dos motores especializados:} PostGIS se ajusta a geometrías y relaciones espaciales; InfluxDB a medidas fechadas y agregaciones temporales. Evita forzar un único modelo a resolver necesidades distintas.
+\item \textbf{EPSG:25830:} las coordenadas publicadas están proyectadas en metros, de modo que un radio de 50 tiene significado directo. Se conserva la coordenada \texttt{REAL} publicada.
+\item \textbf{Agregación para InfluxDB:} se reduce el volumen de puntos y la cardinalidad; el detalle sigue en PostgreSQL. Categoría y distrito son etiquetas porque sirven para filtrar y agrupar.
+\item \textbf{Umbral de 50 m:} se usa como parámetro de demostración y debe ajustarse con personal municipal antes de emplearse operativamente.
+\item \textbf{Alcance de evidencia:} SQLite/R-tree permitió obtener un resultado local reproducible mientras Docker no estaba disponible. No se atribuye ese resultado a una ejecución de PostGIS y quedan por validar la carga y las consultas en ambos servicios.
+\end{itemize}
+\section{Conclusiones y aprendizaje}
+El proyecto concreta dos usos de bases especializadas del tema en un problema urbano real: análisis espacial de avisos y agregación de su evolución temporal. La ejecución local halló un par a 21,0 m dentro de la muestra; la arquitectura separa el detalle geográfico de la serie de conteos. La evidencia temporal es todavía insuficiente y los contenedores requieren una ejecución posterior con Docker activo y una muestra más amplia. El repositorio incluye los pasos y ficheros necesarios para continuar esa validación.
+\section{Declaración de uso de inteligencia artificial}
+Se utilizó ChatGPT como apoyo para estructurar y redactar la memoria, preparar el código de ejemplo y adaptar el proyecto. La prueba local espacial se ejecutó con SQLite/R-tree y se comprobó el resultado de 21,0 m. La configuración de PostGIS e InfluxDB se preparó, pero no se pudo ejecutar por falta de un motor Docker activo. El estudiante debe revisar el contenido, ejecutar la pila y ser capaz de explicar y defender las decisiones y resultados antes de entregar.
+\section{Referencias}
+\begin{thebibliography}{9}
+\bibitem{madrid} Ayuntamiento de Madrid, \textit{Avisos ciudadanos}, Portal de Datos Abiertos, conjunto 212411-0-madrid-avisa. \url{https://datos.madrid.es/dataset/212411-0-madrid-avisa}. Consulta: 20/10/2026.
+\bibitem{recurso} Ayuntamiento de Madrid, \textit{Avisos ciudadanos recibidos (SIC), recurso CSV 2026}. \url{https://datos.madrid.es/dataset/212411-0-madrid-avisa/resource/212411-17-madrid-avisa-csv}.
+\bibitem{diccionario} Ayuntamiento de Madrid, \textit{Diccionario de datos de avisos ciudadanos}. \url{https://datos.madrid.es/dataset/212411-0-madrid-avisa/resource/212411-39-madrid-avisa/download/212411-39-madrid-avisa.pdf}.
+\bibitem{postgis} PostGIS Project, \textit{ST\_DWithin}. \url{https://postgis.net/docs/ST_DWithin.html}.
+\bibitem{influx} InfluxData, \textit{InfluxDB documentation}. \url{https://docs.influxdata.com/influxdb/v2/}.
+\end{thebibliography}
+\appendix
+\section{Estructura del proyecto}
+La carpeta del proyecto contiene \texttt{docker-compose.yml}, \texttt{sql/schema.sql}, \texttt{sql/nearby.sql}, \texttt{sql/serie\_diaria.flux}, \texttt{scripts/load\_data.py} y \texttt{data/avisos\_madrid\_muestra\_2026.csv}. El README explica cómo levantar los servicios e importar el CSV. El archivo \texttt{scripts/prototype\_sqlite.py} reproduce la prueba local de proximidad.
+\end{document}

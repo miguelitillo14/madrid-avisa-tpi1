@@ -1,0 +1,6 @@
+_id,TIPO_INCIDENCIA,CATEGORIA_NIVEL1,CATEGORIA_NIVEL2,CANAL_DE_ENTRADA,FECHA_DE_RECEPCION,DISTRITO,BARRIO,TIPO_VIAL,NOMBRE_DE_VIAL,NUMERO,COORDENADA_OFICIAL_X,COORDENADA_OFICIAL_Y,COORDENADA_REAL_X,COORDENADA_REAL_Y
+1,Aviso,Árboles y parques,Incidencias de riego,Madrid Móvil (Android),01/01/2026,Carabanchel,Buenavista,Avenida,Poblados,106,437506,4469493,437534,4469466
+2,Aviso,Limpieza y pintadas,Limpieza en vías públicas,Madrid Móvil (Android),01/01/2026,Moratalaz,Media Legua,Calle,Corregidor Diego De Valderrabano,32,444140,4473456,444114,4473463
+3,Aviso,Árboles y parques,Incidencias de riego,Madrid Móvil (iOS),01/01/2026,Ciudad Lineal,Costillares,Calle,Arturo Soria,335,443546,4481436,443534,4481406
+4,Aviso,Señales y semáforos,Incidencia en señal,Madrid Móvil (Android),01/01/2026,Moratalaz,Media Legua,Calle,Corregidor Diego De Valderrabano,26,444075,4473439,444095,4473454
+5,Aviso,Limpieza y pintadas,Limpieza en vías públicas,Madrid Móvil (Android),01/01/2026,Ciudad Lineal,La Concepcion,Calle,Virgen De Nuria,25,444815,4476495,444819,4476490

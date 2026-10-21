@@ -1,0 +1,43 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: madrid-avisa-postgis
+    environment:
+      POSTGRES_DB: avisos
+      POSTGRES_USER: avisos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-avisos_local}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./sql:/workspace/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U avisos -d avisos"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: madrid-avisa-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-avisos_local_2026}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-madrid}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-avisos}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-madrid_avisa_local_token}
+    volumes:
+      - influx_data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgis_data:
+  influx_data:
