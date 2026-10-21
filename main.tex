@@ -40,7 +40,7 @@ Diseñar un prototipo reproducible que use PostGIS para consultas espaciales sob
 \item Documentar la procedencia y el sistema de referencia de las coordenadas.
 \item Modelar los avisos como puntos en EPSG:25830 e indexarlos con GiST para consultar proximidad.
 \item Agregar avisos por día, distrito y categoría y escribir la serie resultante en InfluxDB.
-\item Contrastar el caso espacial con la muestra mediante una demostración ejecutada en SQLite/R-tree y dejar configurado el despliegue reproducible de ambos motores especializados.
+\item Validar la consulta espacial y la escritura de agregados temporales en los dos motores especializados con una muestra real.
 \end{itemize}
 \section{Conceptos y tecnologías aplicadas}
 \subsection{PostGIS, puntos y SRID}
@@ -63,30 +63,30 @@ SQLite/R-tree & Muestra temporal de cinco registros & Demostración ejecutada de
 \subsection{Implementación}
 El proyecto contiene el esquema SQL, la consulta PostGIS, un archivo Compose para PostGIS e InfluxDB, una muestra CSV y el cargador Python. El ETL usa el identificador municipal para hacer una carga repetible en PostgreSQL y agrupa por fecha, distrito y categoría antes de escribir en InfluxDB. La consulta temporal de ejemplo se incluye en Flux.
 
-Los contenedores no se pudieron iniciar en el equipo de elaboración porque Docker no tenía un motor activo. Por ello, la configuración es una implementación preparada para ejecutar, no una validación observada de la carga en PostGIS e InfluxDB. El resultado espacial que sigue procede de la ejecución de SQLite/R-tree ya realizada sobre la misma muestra.
+Se levantaron PostGIS 16-3.4 e InfluxDB 2.7 con Docker Compose. El cargador leyó cinco filas del CSV y escribió los avisos en PostGIS y cinco agregados en InfluxDB. Se repitió la carga para comprobar que no duplica datos: PostGIS mantuvo cinco identificadores únicos e InfluxDB siguió devolviendo cinco series diarias. La consulta SQL espacial y una consulta Flux para la fecha del conjunto devolvieron resultados. SQLite/R-tree también se conserva como demostración local independiente.
 \section{Resultados obtenidos}
-La muestra contiene cinco avisos reales, con coordenadas reales UTM-30 ETRS89. La prueba SQLite/R-tree encontró un solo par dentro del umbral de 50 m:
+La muestra contiene cinco avisos reales, con coordenadas reales UTM-30 ETRS89. PostGIS y la prueba SQLite/R-tree encontraron el mismo par dentro del umbral de 50 m:
 \begin{center}\begin{tabular}{ll}\toprule
 Aviso A & 2: limpieza de vía pública\\Aviso B & 4: incidencia en señal\\Distrito y barrio & Moratalaz, Media Legua\\Distancia calculada & 21,0 m\\\bottomrule\end{tabular}\end{center}
 Ambos registros corresponden a la calle Corregidor Diego de Valderrabano, números 32 y 26. El plan de consulta de SQLite utilizó el índice virtual R-tree para el filtrado espacial.
 
-En los cinco registros, el agregado de diseño produciría cinco grupos fecha-distrito-categoría, cada uno con total 1. Este conteo se deriva directamente del CSV; no se presenta como una escritura observada en InfluxDB. La muestra comparte una sola fecha y, por tanto, no permite evaluar una tendencia temporal.
+InfluxDB recibió y devolvió cinco puntos para el 1 de enero de 2026, uno por cada combinación de distrito y categoría, todos con total 1. Al repetir la carga, PostGIS mantuvo cinco IDs y la consulta temporal siguió devolviendo cinco grupos, sin duplicados. Como los cinco avisos comparten fecha, la muestra valida la escritura y consulta, pero no permite evaluar una tendencia temporal.
 \section{Análisis e interpretación}
 La pareja encontrada muestra que la proximidad puede relacionar avisos de servicios diferentes en una zona reducida. Los 21 metros son una señal para revisar los casos y su contexto; no prueban que sean duplicados ni que deban asignarse al mismo equipo. La distancia calculada entre coordenadas tampoco modela la red de calles ni obstáculos.
 
-La serie temporal aporta una perspectiva complementaria: cuando se procese un intervalo suficientemente largo, permitirá comparar conteos por día, distrito y categoría. Cinco avisos del mismo día solo verifican la lógica de agregación de forma trivial. No se deben extraer conclusiones de demanda o estacionalidad con esta muestra.
+La serie temporal aporta una perspectiva complementaria y la prueba confirma que los agregados se pueden escribir y consultar por día, distrito y categoría. Cinco avisos del mismo día solo validan técnicamente el flujo. No se deben extraer conclusiones de demanda o estacionalidad con esta muestra.
 \section{Decisiones tomadas y justificación}
 \begin{itemize}[leftmargin=1.2cm]
 \item \textbf{Dos motores especializados:} PostGIS se ajusta a geometrías y relaciones espaciales; InfluxDB a medidas fechadas y agregaciones temporales. Evita forzar un único modelo a resolver necesidades distintas.
 \item \textbf{EPSG:25830:} las coordenadas publicadas están proyectadas en metros, de modo que un radio de 50 tiene significado directo. Se conserva la coordenada \texttt{REAL} publicada.
 \item \textbf{Agregación para InfluxDB:} se reduce el volumen de puntos y la cardinalidad; el detalle sigue en PostgreSQL. Categoría y distrito son etiquetas porque sirven para filtrar y agrupar.
 \item \textbf{Umbral de 50 m:} se usa como parámetro de demostración y debe ajustarse con personal municipal antes de emplearse operativamente.
-\item \textbf{Alcance de evidencia:} SQLite/R-tree permitió obtener un resultado local reproducible mientras Docker no estaba disponible. No se atribuye ese resultado a una ejecución de PostGIS y quedan por validar la carga y las consultas en ambos servicios.
+\item \textbf{Validación:} se ejecutaron los contenedores, se cargaron cinco avisos y la consulta PostGIS encontró el par a 21,0 m. InfluxDB devolvió cinco agregados. SQLite/R-tree ofrece una comprobación independiente de la distancia.
 \end{itemize}
 \section{Conclusiones y aprendizaje}
-El proyecto concreta dos usos de bases especializadas del tema en un problema urbano real: análisis espacial de avisos y agregación de su evolución temporal. La ejecución local halló un par a 21,0 m dentro de la muestra; la arquitectura separa el detalle geográfico de la serie de conteos. La evidencia temporal es todavía insuficiente y los contenedores requieren una ejecución posterior con Docker activo y una muestra más amplia. El repositorio incluye los pasos y ficheros necesarios para continuar esa validación.
+El proyecto aplica PostGIS al análisis espacial e InfluxDB a la agregación temporal de avisos reales. La ejecución con Docker cargó los cinco registros en ambos motores, encontró un par a 21,0 m y consultó los cinco agregados diarios. La arquitectura queda validada con la muestra disponible; para analizar tendencias se necesitaría una serie con muchas más fechas. El repositorio incluye los pasos y ficheros para repetir la carga.
 \section{Declaración de uso de inteligencia artificial}
-Se utilizó ChatGPT como apoyo para estructurar y redactar la memoria, preparar el código de ejemplo y adaptar el proyecto. La prueba local espacial se ejecutó con SQLite/R-tree y se comprobó el resultado de 21,0 m. La configuración de PostGIS e InfluxDB se preparó, pero no se pudo ejecutar por falta de un motor Docker activo. El estudiante debe revisar el contenido, ejecutar la pila y ser capaz de explicar y defender las decisiones y resultados antes de entregar.
+Se utilizó ChatGPT como apoyo para estructurar y redactar la memoria y preparar el código del proyecto. La pila de Docker se ejecutó y se contrastaron los resultados de PostGIS, InfluxDB y SQLite/R-tree sobre la muestra. El estudiante debe revisar el contenido y ser capaz de explicar y defender las decisiones y resultados antes de entregar.
 \section{Referencias}
 \begin{thebibliography}{9}
 \bibitem{madrid} Ayuntamiento de Madrid, \textit{Avisos ciudadanos}, Portal de Datos Abiertos, conjunto 212411-0-madrid-avisa. \url{https://datos.madrid.es/dataset/212411-0-madrid-avisa}. Consulta: 20/10/2026.

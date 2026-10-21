@@ -1,5 +1,5 @@
 from(bucket: "avisos")
-  |> range(start: -30d)
+  |> range(start: -365d)
   |> filter(fn: (r) => r._measurement == "avisos_diarios" and r._field == "total")
   |> group(columns: ["distrito", "categoria"])
   |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)
