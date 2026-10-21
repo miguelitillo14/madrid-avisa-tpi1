@@ -26,7 +26,7 @@
 \vfill\begin{tabular}{>{\bfseries}p{4cm}p{9.2cm}}Estudiante: & \Estudiante\\Profesor: & Dr. Anier Soria Lorente\\Fecha: & \FechaEntrega\\\end{tabular}\vfill{\small Universidad Loyola Andalucía}\end{center}\end{titlepage}
 \tableofcontents\newpage
 \section{Problema real y contexto}
-El Ayuntamiento de Madrid recibe avisos sobre incidencias de limpieza, arbolado, señales y otros servicios urbanos. El conjunto abierto \textit{Avisos ciudadanos recibidos (SIC)} publica esos registros con fecha, categoría, distrito, dirección y coordenadas. Una unidad municipal necesita detectar avisos que se encuentran cerca para apoyar el triaje y, además, conocer cómo varía el volumen de avisos por zona y categoría a lo largo del tiempo.
+El Ayuntamiento de Madrid recibe avisos sobre incidencias de limpieza, arbolado, señales y otros servicios urbanos. El conjunto abierto \textit{Avisos ciudadanos recibidos (SIC)} publica esos registros con fecha, categoría, distrito, dirección y coordenadas \cite{madrid,recurso}. Una unidad municipal necesita detectar avisos que se encuentran cerca para apoyar el triaje y, además, conocer cómo varía el volumen de avisos por zona y categoría a lo largo del tiempo.
 
 La memoria trabaja con una muestra reproducible de cinco avisos reales del recurso de 2026, todos recibidos el 1 de enero. La muestra permite demostrar una consulta espacial concreta, aunque no basta para inferir patrones temporales ni el funcionamiento global del servicio. El proyecto incluye una canalización preparada para procesar un CSV más amplio.
 
@@ -44,11 +44,11 @@ Diseñar un prototipo reproducible que use PostGIS para consultas espaciales sob
 \end{itemize}
 \section{Conceptos y tecnologías aplicadas}
 \subsection{PostGIS, puntos y SRID}
-El diccionario municipal describe las coordenadas reales como UTM-30 sobre ETRS89. Se almacenan como \texttt{geometry(Point, 25830)}; este sistema proyectado expresa las distancias en metros dentro del ámbito de Madrid. PostGIS añade tipos espaciales y funciones al modelo PostgreSQL.
+El diccionario municipal describe las coordenadas reales como UTM-30 sobre ETRS89 \cite{diccionario}. Se almacenan como \texttt{geometry(Point, 25830)}; este sistema proyectado expresa las distancias en metros dentro del ámbito de Madrid. PostGIS añade tipos espaciales y funciones al modelo PostgreSQL.
 \subsection{Índice espacial y proximidad}
-La consulta usa \texttt{ST\_DWithin(a.geom,b.geom,50)} para seleccionar pares a 50 metros o menos. Un índice GiST sobre la geometría ayuda a reducir candidatos en consultas compatibles. La consulta debe excluir el emparejamiento de un aviso consigo mismo y evitar duplicados mediante el orden de los identificadores.
+La consulta usa \texttt{ST\_DWithin(a.geom,b.geom,50)} para seleccionar pares a 50 metros o menos \cite{postgis}. Un índice GiST sobre la geometría ayuda a reducir candidatos en consultas compatibles. La consulta debe excluir el emparejamiento de un aviso consigo mismo y evitar duplicados mediante el orden de los identificadores.
 \subsection{InfluxDB y agregación temporal}
-InfluxDB recibe una medición \texttt{avisos\_diarios}, con fecha como tiempo, distrito y categoría como etiquetas y el total como campo numérico. Esta forma permite consultar y agrupar valores a lo largo de ventanas temporales. Las etiquetas se limitan a dimensiones descriptivas estables; el identificador individual del aviso no se guarda como etiqueta.
+InfluxDB recibe una medición \texttt{avisos\_diarios}, con fecha como tiempo, distrito y categoría como etiquetas y el total como campo numérico \cite{influx}. Esta forma permite consultar y agrupar valores a lo largo de ventanas temporales. Las etiquetas se limitan a dimensiones descriptivas estables; el identificador individual del aviso no se guarda como etiqueta.
 \section{Desarrollo del trabajo}
 \subsection{Diseño de la solución}
 El flujo parte de un CSV del portal municipal. Un cargador Python transforma cada fila en un punto PostGIS y calcula los conteos diarios para InfluxDB. Docker Compose define los dos servicios y conserva sus datos en volúmenes. PostGIS mantiene el detalle individual y resuelve preguntas geográficas; InfluxDB mantiene la serie agregada. El prototipo ejecutado de la consulta espacial emplea SQLite en memoria y su índice R-tree como prueba local independiente de los contenedores.
@@ -70,7 +70,7 @@ La muestra contiene cinco avisos reales, con coordenadas reales UTM-30 ETRS89. P
 Aviso A & 2: limpieza de vía pública\\Aviso B & 4: incidencia en señal\\Distrito y barrio & Moratalaz, Media Legua\\Distancia calculada & 21,0 m\\\bottomrule\end{tabular}\end{center}
 Ambos registros corresponden a la calle Corregidor Diego de Valderrabano, números 32 y 26. El plan de consulta de SQLite utilizó el índice virtual R-tree para el filtrado espacial.
 
-InfluxDB recibió y devolvió cinco puntos para el 1 de enero de 2026, uno por cada combinación de distrito y categoría, todos con total 1. Al repetir la carga, PostGIS mantuvo cinco IDs y la consulta temporal siguió devolviendo cinco grupos, sin duplicados. Como los cinco avisos comparten fecha, la muestra valida la escritura y consulta, pero no permite evaluar una tendencia temporal.
+InfluxDB recibió cinco puntos con marca temporal de medianoche UTC del 1 de enero de 2026, uno por cada combinación de distrito y categoría. La consulta Flux devolvió cinco grupos, todos con total 1. La función \texttt{aggregateWindow} etiqueta cada resultado con el final de la ventana diaria; por eso la interfaz muestra el 2 de enero a la 01:00 (hora local), aunque los puntos originales correspondan al 1 de enero. Al repetir la carga, PostGIS mantuvo cinco IDs y la consulta temporal siguió devolviendo cinco grupos. Como los cinco avisos comparten fecha, la muestra valida la escritura y consulta, pero no permite evaluar una tendencia temporal.
 \section{Análisis e interpretación}
 La pareja encontrada muestra que la proximidad puede relacionar avisos de servicios diferentes en una zona reducida. Los 21 metros son una señal para revisar los casos y su contexto; no prueban que sean duplicados ni que deban asignarse al mismo equipo. La distancia calculada entre coordenadas tampoco modela la red de calles ni obstáculos.
 
