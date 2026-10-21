@@ -8,16 +8,18 @@ El CSV incluido contiene cinco filas reales del recurso municipal de 2026, con a
 
 ## Arranque local
 
-Requisitos: Docker con Compose y Python 3.10 o superior.
+Requisitos: Docker Desktop con Compose y Python 3.10 o superior. No es necesario activar el entorno virtual, por lo que estos comandos también funcionan si PowerShell bloquea la ejecución de scripts.
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up -d
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python scripts/load_data.py
+docker compose ps
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe scripts/load_data.py --csv data/avisos_madrid_muestra_2026.csv
 ```
+
+Ejecuta `Copy-Item` solo la primera vez; si ya tienes `.env`, conserva ese archivo. Espera hasta que los servicios aparezcan como `healthy` antes de continuar. Si `.venv` ya existe, omite la creación y ejecuta directamente los comandos de instalación y carga.
 
 La primera inicialización crea el esquema PostGIS y sus índices. La consulta espacial se ejecuta así:
 
@@ -25,7 +27,15 @@ La primera inicialización crea el esquema PostGIS y sus índices. La consulta e
 docker compose exec postgis psql -U avisos -d avisos -f /workspace/sql/nearby.sql
 ```
 
-Para consultar InfluxDB, abre `http://localhost:8086` e inicia sesión con los valores de desarrollo de `.env.example`. El ejemplo de Flux está en `sql/serie_diaria.flux`; cubre los últimos 365 días para incluir la fecha de la muestra.
+Con la muestra incluida debe aparecer un único par: avisos 2 y 4, separados por 21,0 m, en Moratalaz (Media Legua). Para verificar el recuento y el SRID:
+
+```powershell
+docker compose exec postgis psql -U avisos -d avisos -c "SELECT COUNT(*) AS total, COUNT(DISTINCT id) AS ids_unicos, MIN(ST_SRID(geom)) AS srid FROM aviso;"
+```
+
+El resultado esperado es `5 | 5 | 25830`. Para comprobar que la carga se puede repetir sin duplicar registros, vuelve a ejecutar el comando del cargador y repite esta consulta.
+
+Para consultar InfluxDB, abre `http://localhost:8086` e inicia sesión con los valores de desarrollo de `.env.example` (usuario `admin`, contraseña `avisos_local_2026`, organización `madrid` y bucket `avisos`, si no los cambiaste). En **Data Explorer → Script Editor**, ejecuta el contenido de `sql/serie_diaria.flux`; deben aparecer cinco grupos, uno por combinación de distrito y categoría, cada uno con total 1. La hora que muestra la consulta corresponde al final de cada ventana diaria agregada.
 
 La carga es idempotente: PostGIS usa `ON CONFLICT` por identificador y las escrituras temporales repiten la misma serie y marca de tiempo. Las credenciales del ejemplo son únicamente para desarrollo local y no deben reutilizarse en un servidor público.
 
